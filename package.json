@@ -1,0 +1,8 @@
+{
+  "name": "prepprofitos-flaming-sizzle",
+  "private": true,
+  "version": "114.0.0",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}
