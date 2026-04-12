@@ -8,7 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#111827" />
-  <title>153_PrepProfitOS_Inventory_Compact_Count_Controls.html</title>
+  <title>196_PrepProfitOS_Tonight_TradingDay_Breadcrumb_Roster.html</title>
   <style>
     :root{
       --bg:#f4f6fb;
@@ -390,8 +390,8 @@ textarea{min-height:76px}
 (function(){
     'use strict';
 
-    const BUILD_VERSION = '194 Prompt Compliance Tightening';
-    const BUILD_STAMP = 'build194_prompt_compliance_tightening';
+    const BUILD_VERSION = '195 Deployment Candidate Tonight';
+    const BUILD_STAMP = 'build196_tonight_trading_day_breadcrumb_roster';
     const DATA_VERSION = 'ppos_build_160_transfers_task_first_initial_review_v1';
     const APP_TITLE = 'PrepProfitOS ' + BUILD_VERSION + ' - ' + BUILD_STAMP;
     const STORAGE_PREFIX = 'PPOS_' + DATA_VERSION + '_';
@@ -1022,7 +1022,6 @@ function formatDateTime(value){
         orderPrefix:'ORD',
         stockVarianceAlertThreshold:1,
         sessionTimeoutMinutes:5,
-        advancedMode:false,
         advancedMode:false
       };
 
@@ -1541,6 +1540,20 @@ function moduleMetaForView(view){
           verifiedBy:r.verifiedByName || r.verifiedBy || '',
           location:r.locationName || r.locationId || '',
           action:"App.openView('waste',{rememberSource:true})"
+        });
+      });
+      (state.shifts || []).forEach(function(r){
+        pushRow({
+          id:r.id,
+          module:'Trading Day',
+          icon:'⏱️',
+          title:(r.scopeLabel || r.userName || r.userId || 'Trading Day'),
+          subtitle:'Status ' + (r.status || 'unknown') + (r.closeVariance!==undefined ? (' · Variance ' + r.closeVariance) : ''),
+          capturedBy:r.userName || r.userId || 'Unknown',
+          capturedAt:dateValue(r.openedAt, r.createdAt),
+          verifiedBy:r.closedByName || r.closedBy || '',
+          location:r.scopeLabel || '',
+          action:"App.openView('admin_center',{rememberSource:true});App.setAdminCenterTab('shifts')"
         });
       });
       (state.movements || []).forEach(function(r){
@@ -2949,8 +2962,8 @@ function renderCommandRail(derived, user, chip){
       if(commandViews.indexOf(ui.view) >= 0) return `<div class="ops-rail">
             <button class="nav-chip menu-icon-chip" onclick="App.openMenu()">☰</button>
             <button class="nav-chip ${ui.view === 'todayOps' ? 'active' : ''}" onclick="App.openView('todayOps')">Today</button>
-            <button class="nav-chip ${ui.view === 'admin_center' ? 'active' : ''}" onclick="App.openView('admin_center')">Admin</button>
-            <button class="nav-chip ${ui.view === 'management_bi' ? 'active' : ''}" onclick="App.openView('management_bi')">BI</button>
+            ${isAdvancedMode() ? `<button class="nav-chip ${ui.view === 'admin_center' ? 'active' : ''}" onclick="App.openView('admin_center')">Admin</button>` : ``}
+            ${isAdvancedMode() ? `<button class="nav-chip ${ui.view === 'management_bi' ? 'active' : ''}" onclick="App.openView('management_bi')">BI</button>` : ``}
             <button class="nav-chip ${ui.view === 'control_panel' ? 'active' : ''}" onclick="App.openView('control_panel')">Control</button>
             <button class="nav-chip" onclick="App.openView('pos')">POS</button>
             <button class="nav-chip" onclick="App.openView('kds')">KDS <span class="badge info">${esc(derived.badgeCounts.kdsTickets)}</span></button>
@@ -3418,7 +3431,7 @@ function nextStageButton(ticket){
         { label:'Transfers',      value:transferToday,    tone:'',                          view:"App.openView('transfers',{rememberSource:true})" },
         { label:'Waste Review',   value:wasteToday,       tone:wasteToday>3?'warn':'',     view:"App.openView('waste',{rememberSource:true})" },
         { label:'Counts Today',   value:countsToday,      tone:countsToday?'success':'',   view:"App.openView('inventory',{rememberSource:true})" },
-        { label:'Shift Status',   value:shiftLabel,       tone:openShift?'success':'warn', view:"App.openView('admin_center',{rememberSource:true});App.setAdminTab('shifts')" }
+        { label:'Shift Status',   value:shiftLabel,       tone:openShift?'success':'warn', view:"App.openView('admin_center',{rememberSource:true});App.setAdminCenterTab('shifts')" }
       ];
       const bubbleGrid = `<div class="kpi-strip-4">${bubbles.map(function(b){
         return `<button class="kpi-pill-lg ${b.tone}" onclick="${b.view}"><div class="label">${esc(b.label)}</div><div class="value">${esc(String(b.value))}</div></button>`;
@@ -4370,7 +4383,7 @@ function renderFloating(){
       </div>`;
 
       const kpiStrip = `<div class="kpi-strip-4">
-        <button class="kpi-pill-lg ${currentOpenShift()?'success':'warn'}"><div class="label">Shift</div><div class="value" style="font-size:14px">${currentOpenShift()?'Open':'Closed'}</div></button>
+        <button class="kpi-pill-lg ${currentOpenShift()?'success':'warn'}"><div class="label">Trading Day</div><div class="value" style="font-size:14px">${currentOpenShift()?'Open':'Closed'}</div></button>
         <button class="kpi-pill-lg"><div class="label">Station</div><div class="value" style="font-size:13px">${esc(station.type)}</div></button>
         <button class="kpi-pill-lg"><div class="label">User</div><div class="value" style="font-size:13px">${esc(current?current.name:'—')}</div></button>
         <button class="kpi-pill-lg"><div class="label">Build</div><div class="value" style="font-size:12px">${esc(BUILD_VERSION)}</div></button>
@@ -7234,7 +7247,7 @@ function renderShiftsModule(){
     ? '<div class="card soft"><div class="row between"><div><h3 style="margin:0">Today\'s roster</h3><div class="subtitle">Editable defaults for live operations.</div></div><span class="pill-state pill-ready">Loaded</span></div><div class="tiny muted" style="margin-top:8px">' + esc(dutyRoster.templateName || 'Shift') + ' · Supervisor ' + esc((getUserById(dutyRoster.supervisorId) || {}).name || '-') + ' · ' + esc((dutyRoster.staffIds || []).length) + ' staff</div></div>'
     : '<div class="card soft"><div class="row between"><div><h3 style="margin:0">Today\'s roster</h3><div class="subtitle">No roster saved yet. Load a default template, adjust, then save.</div></div><span class="pill-state pill-waiting">Missing</span></div></div>';
 
-  const rosterEditor = '<div class="card stack"><div class="row between"><div><h3>Roster defaults</h3><div class="subtitle">Use logical defaults first, then edit differences only.</div></div><button class="mini-btn" onclick="App.applyRosterTemplate()">Load defaults</button></div>'
+  const rosterEditor = '<div class="card stack"><div class="row between"><div><h3>Trading Day roster</h3><div class="subtitle">Use logical defaults first, then edit differences only. This roster feeds Trading Day verification and accountability.</div></div><button class="mini-btn" onclick="App.applyRosterTemplate()">Load defaults</button></div>'
     + '<div class="grid two"><div class="field"><label>Date</label><input value="' + esc(ui.rosterDate || today()) + '" type="date" onchange="App.setRosterField(\'date\',this.value)" /></div><div class="field"><label>Shift template</label><select onchange="App.setRosterField(\'templateId\',this.value)">' + templateOptions + '</select></div></div>'
     + '<div class="grid two"><div class="field"><label>Supervisor</label><select onchange="App.setRosterField(\'supervisorId\',this.value)">' + verifierOptions + '</select></div><div class="field"><label>Template hours</label><input value="' + esc((template || {}).startTime || '') + ' - ' + esc((template || {}).endTime || '') + '" disabled /></div></div>'
     + '<div class="field"><label>Assigned staff</label><div class="stack" style="max-height:240px;overflow:auto">' + rosterRows + '</div></div>'
@@ -7242,11 +7255,11 @@ function renderShiftsModule(){
 
   const openSummary = openShift ? shiftSummary(openShift) : null;
   const openCard = !openShift
-    ? `<div class="card stack"><div><h3>Open shift</h3><div class="subtitle">Use the saved roster and open your current trading shift. Defaults can still be edited here.</div></div><div class="field"><label>Opening float</label><input value="${esc(ui.shiftOpeningFloat || '')}" oninput="App.setShiftField('openingFloat',this.value)" inputmode="decimal" placeholder="0.00" /></div><div class="field"><label>Open note</label><input value="${esc(ui.shiftNote || '')}" oninput="App.setShiftField('note',this.value)" placeholder="Optional opening note" /></div><div class="field-actions"><button class="primary-btn" onclick="App.openShift()">Open shift</button></div></div>`
-    : `<div class="card stack"><div class="row between"><div><h3>Close current shift</h3><div class="subtitle">Blank actual fields default to expected values.</div></div><span class="pill-state pill-cooking">open</span></div><div class="grid two"><div class="card soft stat-card"><div class="label">Opening float</div><div class="value" style="font-size:20px">${esc(money(openShift.openingFloat || 0))}</div></div><div class="card soft stat-card"><div class="label">Paid sales</div><div class="value" style="font-size:20px">${esc(money(openSummary.paidSales))}</div></div></div><div class="grid two"><div class="field"><label>Actual cash</label><input value="${esc(ui.shiftCloseCash || '')}" oninput="App.setShiftField('closeCash',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.cash))}" /></div><div class="field"><label>Actual card</label><input value="${esc(ui.shiftCloseCard || '')}" oninput="App.setShiftField('closeCard',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.card))}" /></div></div><div class="grid two"><div class="field"><label>Actual mobile</label><input value="${esc(ui.shiftCloseTransfer || '')}" oninput="App.setShiftField('closeMobile',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.mobile || openSummary.transfer || 0))}" /></div><div class="field"><label>Actual wallet</label><input value="${esc(ui.shiftCloseWallet || '')}" oninput="App.setShiftField('closeWallet',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.wallet))}" /></div></div><div class="field"><label>Close note</label><input value="${esc(ui.shiftCloseNote || '')}" oninput="App.setShiftField('closeNote',this.value)" placeholder="Optional close note" /></div><div class="field-actions"><button class="primary-btn" onclick="App.closeShift()">Close shift</button></div></div>`;
+    ? `<div class="card stack"><div><h3>Start Trading Day</h3><div class="subtitle">Use the saved roster and open your current Trading Day. Defaults can still be edited here.</div></div><div class="field"><label>Opening float</label><input value="${esc(ui.shiftOpeningFloat || '')}" oninput="App.setShiftField('openingFloat',this.value)" inputmode="decimal" placeholder="0.00" /></div><div class="field"><label>Open note</label><input value="${esc(ui.shiftNote || '')}" oninput="App.setShiftField('note',this.value)" placeholder="Optional opening note" /></div><div class="field-actions"><button class="primary-btn" onclick="App.openShift()">Start Trading Day</button></div></div>`
+    : `<div class="card stack"><div class="row between"><div><h3>Close Trading Day</h3><div class="subtitle">Blank actual fields default to expected values.</div></div><span class="pill-state pill-cooking">open</span></div><div class="grid two"><div class="card soft stat-card"><div class="label">Opening float</div><div class="value" style="font-size:20px">${esc(money(openShift.openingFloat || 0))}</div></div><div class="card soft stat-card"><div class="label">Paid sales</div><div class="value" style="font-size:20px">${esc(money(openSummary.paidSales))}</div></div></div><div class="grid two"><div class="field"><label>Actual cash</label><input value="${esc(ui.shiftCloseCash || '')}" oninput="App.setShiftField('closeCash',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.cash))}" /></div><div class="field"><label>Actual card</label><input value="${esc(ui.shiftCloseCard || '')}" oninput="App.setShiftField('closeCard',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.card))}" /></div></div><div class="grid two"><div class="field"><label>Actual mobile</label><input value="${esc(ui.shiftCloseTransfer || '')}" oninput="App.setShiftField('closeMobile',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.mobile || openSummary.transfer || 0))}" /></div><div class="field"><label>Actual wallet</label><input value="${esc(ui.shiftCloseWallet || '')}" oninput="App.setShiftField('closeWallet',this.value)" inputmode="decimal" placeholder="Expected ${esc(money(openSummary.wallet))}" /></div></div><div class="field"><label>Close note</label><input value="${esc(ui.shiftCloseNote || '')}" oninput="App.setShiftField('closeNote',this.value)" placeholder="Optional close note" /></div><div class="field-actions"><button class="primary-btn" onclick="App.closeShift()">Close shift</button></div></div>`;
 
   const selectedCard = selected
-    ? `<div class="card stack"><div class="row between"><div><h3>Shift detail</h3><div class="subtitle">${esc(selectedUser && selectedUser.name ? selectedUser.name : selected.userId || '')} · ${esc(shortDateTime(selected.openedAt))}</div></div><span class="pill-state ${selected.status === 'closed' ? 'pill-paid' : 'pill-cooking'}">${esc(selected.status)}</span></div><div class="grid three"><div class="card soft stat-card"><div class="label">Orders</div><div class="value" style="font-size:22px">${esc(summary.ordersCount)}</div></div><div class="card soft stat-card"><div class="label">Paid sales</div><div class="value" style="font-size:22px">${esc(money(summary.paidSales))}</div></div><div class="card soft stat-card"><div class="label">Loyalty earned</div><div class="value" style="font-size:22px">${esc(money(summary.loyaltyEarned))}</div></div></div></div>`
+    ? `<div class="card stack"><div class="row between"><div><h3>Trading Day detail</h3><div class="subtitle">${esc(selectedUser && selectedUser.name ? selectedUser.name : selected.userId || '')} · ${esc(shortDateTime(selected.openedAt))}</div></div><span class="pill-state ${selected.status === 'closed' ? 'pill-paid' : 'pill-cooking'}">${esc(selected.status)}</span></div><div class="grid three"><div class="card soft stat-card"><div class="label">Orders</div><div class="value" style="font-size:22px">${esc(summary.ordersCount)}</div></div><div class="card soft stat-card"><div class="label">Paid sales</div><div class="value" style="font-size:22px">${esc(money(summary.paidSales))}</div></div><div class="card soft stat-card"><div class="label">Loyalty earned</div><div class="value" style="font-size:22px">${esc(money(summary.loyaltyEarned))}</div></div></div></div>`
     : '<div class="card"><div class="empty">No shift history yet.</div></div>';
 
   const history = (state.shifts || []).slice(0,8).map(function(shift){
@@ -7254,7 +7267,7 @@ function renderShiftsModule(){
     return `<button class="rec-card" style="text-align:left;cursor:pointer" onclick="App.selectShift('${esc(shift.id)}')"><div class="rec-head"><div><div class="rec-title">${esc(user.name || shift.userId || 'Shift')}</div><div class="rec-sub">${esc(shortDateTime(shift.openedAt))} · ${esc(shift.scopeLabel || '')}</div></div><span class="stage-pill ${shift.status === 'closed' ? 'stage-ready' : 'stage-prep'}">${esc(shift.status)}</span></div></button>`;
   }).join('');
 
-  return '<div class="stack">' + dutyCard + '<div class="grid two">' + rosterEditor + openCard + '</div><div class="grid two">' + selectedCard + '<div class="card stack"><div><h3>Shift history</h3><div class="subtitle">Recent shifts for this device and staff.</div></div>' + (history || '<div class="empty">No shifts recorded yet.</div>') + '</div></div></div>';
+  return '<div class="stack">' + dutyCard + '<div class="grid two">' + rosterEditor + openCard + '</div><div class="grid two">' + selectedCard + '<div class="card stack"><div><h3>Trading Day history</h3><div class="subtitle">Recent shifts for this device and staff.</div></div>' + (history || '<div class="empty">No shifts recorded yet.</div>') + '</div></div></div>';
 }
 
 function renderOrderHistoryModule(derived){
@@ -7287,11 +7300,13 @@ function renderOrderHistoryModule(derived){
 
       const filtered = rows.filter(function(row){
         if(filter==='all') return true;
+        if(filter==='today') return String(row.capturedAt||'').slice(0,10) === today();
         if(filter==='verified') return !!row.verifiedBy;
         if(filter==='unverified') return !row.verifiedBy;
         if(filter==='stock') return ['Stock Take','Ledger'].indexOf(row.module)>=0;
         if(filter==='operations') return ['Bulk-Prep','Purchases','Transfers','Waste'].indexOf(row.module)>=0;
         if(filter==='ledger') return row.module==='Ledger';
+        if(filter==='shifts') return row.module==='Trading Day';
         return true;
       }).filter(function(row){
         if(!query) return true;
@@ -7310,7 +7325,7 @@ function renderOrderHistoryModule(derived){
       const shiftCount      = (state.shifts||[]).length;
       const ledgerCount     = (state.movements||[]).length;
 
-      const filterChips = [['all','All'],['stock','Stock'],['operations','Operations'],['verified','Verified'],['unverified','Unverified'],['ledger','Ledger']].map(function(f){
+      const filterChips = [['all','All'],['today','Today'],['stock','Stock'],['operations','Operations'],['verified','Verified'],['unverified','Unverified'],['ledger','Ledger'],['shifts','Trading Day']].map(function(f){
         return `<button class="chip ${filter===f[0]?'active':''}" onclick="App.setReportsFilter('${f[0]}')">${esc(f[1])}</button>`;
       }).join('');
 
@@ -7321,8 +7336,8 @@ function renderOrderHistoryModule(derived){
         { label:'Transfers',  count:transferCount,  action:"App.openView('transfers',{rememberSource:true})" },
         { label:'Waste',      count:wasteCount,     action:"App.openView('waste',{rememberSource:true})" },
         { label:'Variances',  count:varianceCount,  action:"App.openView('variances',{rememberSource:true})" },
-        { label:'Shifts',     count:shiftCount,     action:"App.openView('admin_center',{rememberSource:true});App.setAdminTab('shifts')" },
-        { label:'Ledger',     count:ledgerCount,    action:"App.setReportsFilter('ledger')" }
+        { label:'Shifts',     count:shiftCount,     action:"App.openView('admin_center',{rememberSource:true});App.setAdminCenterTab('shifts')" },
+        { label:'Ledger',     count:ledgerCount,    action:"App.openView('inOutLedger',{rememberSource:true})" }
       ].map(function(b){
         return `<button class="kpi-pill-lg" onclick="${b.action}"><div class="label">${esc(b.label)}</div><div class="value">${esc(b.count)}</div></button>`;
       }).join('');
@@ -7440,7 +7455,7 @@ function renderSettingsModule(){
 
 
 function renderModuleHeader(view){
-  if(['inventory','stockTake','stockTakeReport','inOutLedger','purchases','production','transfers','waste','variances'].includes(view)) return '';
+  if(['inventory','stockTake','stockTakeReport','inOutLedger','purchases','production','transfers','waste','variances','admin_center','management_bi','todayOps','control_panel','reports','sales_reports'].includes(view)) return '';
   const meta = {
     dashboard:{eyebrow:'ServeNow', title:'Dashboard', subtitle:'Next-step shortcuts and operational pulse.', gradient:'linear-gradient(135deg,#334155,#64748b)'},
     pos:{eyebrow:'ServeNow', title:'ServeNow', subtitle:'Capture, bill, send, and pay from one flow.', gradient:'linear-gradient(135deg,#ea580c,#fb923c)'},
@@ -8362,7 +8377,7 @@ function resetCartDraft(){
     App.focusWasteQty = focusWasteQty;
     App.openWasteMore = openWasteMore;
     App.submitTransferSheet = submitTransferSheet;
-    App.openLedger = function(){ App.openView('ledger'); };
+    App.openLedger = function(){ App.openView('inOutLedger',{rememberSource:true}); };
     App.openTransferMore = function(){ openActionSheet({ title:'Transfers more', message:'Related transfer actions', buttons:[{label:'Review route', actionId:'switchTransferReview'},{label:'Clear draft', actionId:'clearTransferDraft'},{label:'Ledger', actionId:'openLedger'}] }); };
     App.switchTransferReview = function(){ ui.transferMode = 'receive'; persist(); render(); };
     App.clearTransferDraft = function(){ ui.transferDraft = {}; ui.transferSearch = ''; ui.transferQuickItemId = ''; persist(); render(); };
