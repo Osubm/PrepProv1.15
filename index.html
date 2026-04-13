@@ -8,7 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#111827" />
-  <title>199_PrepProfitOS_TradingDayGuard_LoginProfile.html</title>
+  <title>201_PrepProfitOS_KDSIsolation_eWalletApprovalFix.html</title>
   <style>
     :root{
       --bg:#f4f6fb;
@@ -508,7 +508,8 @@ const CRITICAL_HELPERS = ['stockLocationForBusinessUnit','defaultLocationForBusi
       rosterSupervisorId:'',
       rosterAssignedIds:[],
       reportsSearch:'',
-      reportsFilter:'all'
+      reportsFilter:'all',
+      walletSaveApprovalGranted:false
     };
 
     const DEFAULT_SESSION = {
@@ -680,6 +681,47 @@ function formatDateTime(value){
     }
     function deviceDefaultView(){
       return (currentDeviceProfile() || {}).view || 'pos';
+    }
+
+    function rosterAssignmentsForDate(dateStr){
+      const roster = (state.dailyRosters || []).find(function(item){ return item.date === (dateStr || today()); }) || null;
+      return roster && Array.isArray(roster.assignments) ? roster.assignments : [];
+    }
+    function rosterAssignmentForUser(userId, dateStr){
+      return rosterAssignmentsForDate(dateStr).find(function(item){ return item && item.userId === userId; }) || null;
+    }
+    function rosterDutyRoleForUser(userId, dateStr){
+      return (rosterAssignmentForUser(userId, dateStr) || {}).dutyRole || '';
+    }
+    function rosterScopeForUser(userId, dateStr){
+      const a = rosterAssignmentForUser(userId, dateStr) || {};
+      const scopes = Array.isArray(a.scopeIds) ? a.scopeIds.slice() : [];
+      if(scopes.length) return scopes;
+      const u = getUserById(userId) || {};
+      const role = String(u.role || '');
+      const name = String(u.name || '').toUpperCase();
+      if(role === 'manager' || role === 'admin') return ['all'];
+      if(name === 'JOHN' || name === 'MELUSI') return ['kitchen','inventory'];
+      if(name === 'PERFECT' || name === 'BENE') return ['restaurant','butchery'];
+      if(role === 'supervisor') return ['restaurant'];
+      if(String(u.department || '') === 'kitchen') return ['kitchen'];
+      if(String(u.department || '') === 'butchery') return ['butchery'];
+      return ['restaurant'];
+    }
+    function canApproveByDuty(userId, scopeId){
+      const u = getUserById(userId);
+      if(!u) return false;
+      if(['manager','admin'].includes(String(u.role || ''))) return true;
+      const duty = String(rosterDutyRoleForUser(userId) || '').toLowerCase();
+      const scopes = rosterScopeForUser(userId);
+      return (duty === 'supervisor' || duty === 'elevated_supervisor') && (scopes.indexOf('all') >= 0 || scopes.indexOf(String(scopeId || 'restaurant')) >= 0);
+    }
+    function approvalScopeForContext(kind){
+      const k = String(kind || '').toLowerCase();
+      if(k.indexOf('butchery') >= 0) return 'butchery';
+      if(k.indexOf('kitchen') >= 0 || k.indexOf('production') >= 0 || k.indexOf('bulk') >= 0) return 'kitchen';
+      if(k.indexOf('inventory') >= 0 || k.indexOf('stock') >= 0) return 'inventory';
+      return 'restaurant';
     }
     function storageStatus(){
       try{
@@ -1076,7 +1118,8 @@ function formatDateTime(value){
         stockVarianceAlertThreshold:1,
         sessionTimeoutMinutes:5,
         advancedMode:false,
-        deviceProfile:'pos_device'
+        deviceProfile:'pos_device',
+        forcePinForAllApprovals:true
       };
 
       return {
@@ -1278,14 +1321,13 @@ function moduleMetaForView(view){
     }
     function promptOpenTradingDay(actionLabel){
       ui.drawerOpen = false;
-      ui.view = 'admin_center';
-      ui.adminCenterTab = 'shifts';
       openActionSheet({
         title:'Trading Day closed',
         message:'Open Trading Day before you ' + (actionLabel || 'continue') + '.',
         buttons:[
           { label:'Open Trading Day', actionId:'openTradingDay', kind:'primary' },
-          { label:'Go to Today', actionId:'openToday', kind:'ghost' }
+          { label:'Go to Today', actionId:'openToday', kind:'ghost' },
+          { label:'Cancel', actionId:'dismiss', kind:'ghost' }
         ]
       });
       toast('Trading Day closed. Open Trading Day first.');
@@ -1429,6 +1471,10 @@ function moduleMetaForView(view){
       if(actionId === 'openTradingDay'){
         ui.adminCenterTab = 'shifts';
         pushView('admin_center');
+        return;
+      }
+      if(actionId === 'dismiss'){
+        closeActionSheet();
         return;
       }
       if(actionId === 'openPurchases'){
@@ -1681,6 +1727,7 @@ function moduleMetaForView(view){
         if(!ui.rosterTemplateId) ui.rosterTemplateId = duty.templateId || inferShiftTemplateIdForDate(ui.rosterDate);
         if(!ui.rosterSupervisorId) ui.rosterSupervisorId = duty.supervisorId || '';
         if(!Array.isArray(ui.rosterAssignedIds) || !ui.rosterAssignedIds.length) ui.rosterAssignedIds = (duty.staffIds || []).slice();
+        if(!Array.isArray(ui.rosterAssignments) || !ui.rosterAssignments.length) ui.rosterAssignments = deepClone(duty.assignments || []);
       } else {
         const template = rosterTemplateOrDefault();
         if(template){
@@ -1700,6 +1747,7 @@ function moduleMetaForView(view){
         templateName: (template || {}).name || 'Shift',
         supervisorId: ui.rosterSupervisorId || '',
         staffIds: Array.isArray(ui.rosterAssignedIds) ? ui.rosterAssignedIds.slice() : [],
+        assignments: Array.isArray(ui.rosterAssignments) ? deepClone(ui.rosterAssignments) : [],
         createdAt: nowIso(),
         createdByUserId: session.currentUserId || ''
       };
@@ -1709,6 +1757,7 @@ function moduleMetaForView(view){
         existing.templateName = roster.templateName;
         existing.supervisorId = roster.supervisorId;
         existing.staffIds = roster.staffIds.slice();
+        existing.assignments = deepClone(roster.assignments || []);
         existing.updatedAt = nowIso();
         existing.updatedByUserId = session.currentUserId || '';
       } else {
@@ -3333,28 +3382,36 @@ function nextStageButton(ticket){
     }
 
     function renderKds(derived){
-      const units = ['restaurant','butchery','bar','wifi'];
-      const selectedUnit = units.includes(ui.kdsBusinessUnit) ? ui.kdsBusinessUnit : ((['restaurant','butchery','bar','wifi'].find(function(unit){
+      const isKitchenDevice = currentDeviceProfileId() === 'kds_device';
+      const units = isKitchenDevice ? ['restaurant'] : ['restaurant','butchery','bar','wifi'];
+      const selectedUnit = units.includes(ui.kdsBusinessUnit) ? ui.kdsBusinessUnit : ((units.find(function(unit){
         return ((derived && derived.queueTickets) || []).some(function(t){
           return (t.businessUnit || 'restaurant') === unit;
         });
-      })) || 'restaurant');
+      })) || units[0] || 'restaurant');
       ui.kdsBusinessUnit = selectedUnit;
       const unitTickets = ((derived && derived.queueTickets) || []).filter(function(ticket){
-        return (ticket.businessUnit || 'restaurant') === selectedUnit;
+        if((ticket.businessUnit || 'restaurant') !== selectedUnit) return false;
+        if(!isKitchenDevice) return true;
+        return ticket.station === 'kitchen_queue';
       });
       const waitingCount = unitTickets.filter(function(t){ return t.stage === 'sent'; }).length;
       const prepCount = unitTickets.filter(function(t){ return t.stage === 'cooking'; }).length;
       const readyCount = unitTickets.filter(function(t){ return t.stage === 'ready'; }).length;
       const completedCount = derived.orders.filter(function(order){
-        return order.businessUnit === selectedUnit && order.queueableLines.some(function(line){ return ['served','collected'].includes(line.stage); });
+        if(order.businessUnit !== selectedUnit) return false;
+        return order.queueableLines.some(function(line){
+          if(isKitchenDevice && line.fulfillmentBehaviorSnapshot !== 'kitchen_queue') return false;
+          return ['served','collected'].includes(line.stage);
+        });
       }).length;
-      const unitStrip = '<div class="card"><div class="chip-row" style="overflow-x:auto;white-space:nowrap">' + units.map(function(unit){
+
+      const unitStrip = isKitchenDevice ? '' : ('<div class="card"><div class="chip-row" style="overflow-x:auto;white-space:nowrap">' + units.map(function(unit){
         const count = (((derived && derived.queueTickets) || []).filter(function(ticket){ return (ticket.businessUnit || 'restaurant') === unit; })).length;
         return '<button class="chip ' + (selectedUnit === unit ? 'active' : '') + '" onclick="App.setKdsBusinessUnit(\'' + esc(unit) + '\')">' + esc(formatBusinessUnitLabel(unit)) + (count ? ' <span class="badge info">' + esc(count) + '</span>' : '') + '</button>';
-      }).join('') + '</div></div>';
+      }).join('') + '</div></div>');
 
-      const groups = ['kitchen_queue','bar_queue','service_issue','counter_service'];
+      const groups = isKitchenDevice ? ['kitchen_queue'] : ['kitchen_queue','bar_queue','service_issue','counter_service'];
       const sections = groups.map(function(station){
         const stationTickets = unitTickets.filter(function(t){ return t.station === station; });
         const rows = stationTickets.length ? stationTickets.map(function(ticket){
@@ -3374,10 +3431,12 @@ function nextStageButton(ticket){
         + '<button class="stat-action"><div class="card shortcut-card"><div class="label">Completed</div><div class="value">' + esc(completedCount) + '</div><div class="subtitle">Served / collected</div></div></button>'
         + '</div>';
 
-      return '<div class="stack"><div class="card soft"><h3>KDS workboard</h3><div class="subtitle">Same layout language as ServeNow, focused on the live unit queue.</div></div>' + counters + unitStrip + '<div class="grid two">' + sections + '</div></div>';
+      const subtitle = isKitchenDevice
+        ? 'Kitchen-only queue for the dedicated KDS device.'
+        : 'Same layout language as ServeNow, focused on the live unit queue.';
+
+      return '<div class="stack"><div class="card soft"><h3>KDS workboard</h3><div class="subtitle">' + esc(subtitle) + '</div></div>' + counters + unitStrip + '<div class="grid two">' + sections + '</div></div>';
     }
-
-
 
     function renderStockTakeReport(){
       const reports = (state.stockTakeReports || []).slice(0, 20);
@@ -3670,7 +3729,7 @@ function renderPlaceholder(title, text){ /* developer fallback only; approved ro
       }
       if(ui.approvalModal){
         const m = ui.approvalModal;
-        return '<div><div class="modal-backdrop"></div><div class="modal-wrap"><div class="modal stack"><div class="row between"><div><h3>' + esc(m.title) + '</h3><div class="subtitle">' + esc(m.message) + '</div></div></div><div class="grid two"><div class="field"><label>' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verifier username' : 'Mgr Username') + '</label><input type="text" autocapitalize="off" autocomplete="off" value="' + esc(m.username || '') + '" oninput="App.setApprovalUsername(this.value)" placeholder="' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'supervisor username' : 'manager username') + '" /></div><div class="field"><label>' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verifier PIN' : 'Mgr PIN') + '</label><input type="password" inputmode="numeric" autocomplete="off" value="' + esc(m.pin || '') + '" oninput="App.setApprovalPin(this.value)" placeholder="' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'supervisor PIN' : 'manager/admin PIN') + '" /></div></div>' + (m.error ? '<div class="banner">' + esc(m.error) + '</div>' : '') + '<div class="row"><button class="primary-btn" onclick="App.confirmApprovalModal()">' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verify' : 'Approve') + '</button><button class="ghost-btn" onclick="App.closeApproval()">Cancel</button></div></div></div></div>';
+        return '<div><div class="modal-backdrop"></div><div class="modal-wrap"><div class="modal stack"><div class="row between"><div><h3>' + esc(m.title) + '</h3><div class="subtitle">' + esc(m.message) + '</div></div></div><div class="grid two"><div class="field"><label>' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verifier username' : 'Approver Username') + '</label><input type="text" autocapitalize="off" autocomplete="off" value="' + esc(m.username || '') + '" oninput="App.setApprovalUsername(this.value)" placeholder="' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'supervisor username' : 'approver username') + '" /></div><div class="field"><label>' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verifier PIN' : 'Approver PIN') + '</label><input type="password" inputmode="numeric" autocomplete="off" value="' + esc(m.pin || '') + '" oninput="App.setApprovalPin(this.value)" placeholder="' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'supervisor PIN' : 'approver PIN') + '" /></div></div>' + (m.error ? '<div class="banner">' + esc(m.error) + '</div>' : '') + '<div class="row"><button class="primary-btn" onclick="App.confirmApprovalModal()">' + esc((m.type === 'purchaseVerify' || m.type === 'productionVerify') ? 'Verify' : 'Approve') + '</button><button class="ghost-btn" onclick="App.closeApproval()">Cancel</button></div></div></div></div>';
       }
 
       if(ui.inventorySearchModal){
@@ -4803,7 +4862,7 @@ function bulkReplenishRestaurantDemo(){
       orderMore:openOrderMore,
       runOrderIntent:runOrderIntent,
       openNewRound:openOrderAsNewRound,
-      closePayment:function(){ ui.pendingPaymentOrderId = ''; ui.pendingPaymentKind = ''; ui.pendingPaymentExpectedRowVersion = null; ui.paymentCustomerId = ''; ui.paymentAccountCustomerId = ''; ui.paymentMethod = ''; ui.paymentCashTendered = ''; ui.saveChangeToWallet = false; render(); },
+      closePayment:function(){ ui.pendingPaymentOrderId = ''; ui.pendingPaymentKind = ''; ui.pendingPaymentExpectedRowVersion = null; ui.paymentCustomerId = ''; ui.paymentAccountCustomerId = ''; ui.paymentMethod = ''; ui.paymentCashTendered = ''; ui.saveChangeToWallet = false; ui.walletSaveApprovalGranted = false; render(); },
       setPaymentCustomer:function(v){ ui.paymentCustomerId = v; render(); },
       useLinkedPosCustomerForPayment:function(){ if(!ui.selectedCustomerId){ toast('Link a POS customer first'); return; } ui.paymentCustomerId = ui.selectedCustomerId; render(); },
       setPaymentAccountCustomer:function(v){ ui.paymentAccountCustomerId = v; render(); },
@@ -4828,7 +4887,13 @@ function bulkReplenishRestaurantDemo(){
       submitStockTake:function(){ submitStockTake(''); },
       setApprovalUsername:function(v){ if(ui.approvalModal){ ui.approvalModal.username = String(v || '').toLowerCase().trim(); ui.approvalModal.error = ''; } },
       setApprovalPin:function(v){ if(ui.approvalModal){ ui.approvalModal.pin = v; ui.approvalModal.error = ''; } },
-      confirmApprovalModal:function(){ var t=(ui.approvalModal||{}).type; if(t==='purchaseVerify') return approvePurchaseVerifyFromModal(); if(t==='productionVerify') return approveProductionVerifyFromModal(); return approveStockTakeFromModal(); },
+      confirmApprovalModal:function(){
+        var t=(ui.approvalModal||{}).type;
+        if(t==='purchaseVerify') return approvePurchaseVerifyFromModal();
+        if(t==='productionVerify') return approveProductionVerifyFromModal();
+        if(t==='walletSaveChange') return approveWalletSaveChangeFromModal();
+        return approveStockTakeFromModal();
+      },
       approveStockTake:approveStockTakeFromModal,
       closeApproval:function(){ ui.approvalModal = null; render(); },
       replayPendingRecovery:replayPendingRecovery,
@@ -8013,6 +8078,67 @@ function resetCartDraft(){
       render();
     }
 
+    function openWalletSaveApprovalModal(payload){
+      const actor = currentUser();
+      ui.approvalModal = {
+        type:'walletSaveChange',
+        title:'Approval required',
+        message:'Saving customer change to eWallet requires supervisor/admin approval.',
+        username:'',
+        pin:'',
+        error:'',
+        actorUserId: actor ? actor.id : '',
+        payload: deepClone(payload || {})
+      };
+      persist();
+      render();
+    }
+
+    function approveWalletSaveChangeFromModal(){
+      var modal = ui.approvalModal || {};
+      var username = String(modal.username || '').toLowerCase().trim();
+      var pin = String(modal.pin || '');
+      if(!username || !pin){
+        ui.approvalModal.error = 'Enter approver username and PIN';
+        render();
+        return;
+      }
+      var approver = (state.users || []).find(function(u){
+        return userUsername(u) === normalizeNameKey(username) && userPinAccepted(u, pin);
+      });
+      if(!approver){
+        ui.approvalModal.error = 'Approver username or PIN not accepted';
+        render();
+        return;
+      }
+      var actor = currentUser();
+      if(actor && approver.id === actor.id){
+        ui.approvalModal.error = 'Approver must be a different user';
+        render();
+        return;
+      }
+      if(!canApproveByDuty(approver.id, 'restaurant')){
+        ui.approvalModal.error = 'Approver lacks authority for restaurant approvals';
+        render();
+        return;
+      }
+      var payload = deepClone(modal.payload || {});
+      ui.approvalModal = null;
+      ui.walletSaveApprovalGranted = true;
+      addAudit('WALLET_SAVE_APPROVED', {
+        actorUserId: actor ? actor.id : '',
+        approverUserId: approver.id,
+        approverName: approver.name || '',
+        customerId: payload.customerId || '',
+        walletSavedAmount: Number(payload.walletSavedAmount || 0),
+        paymentMethod: payload.paymentMethod || '',
+        orderId: payload.orderId || ''
+      });
+      persist();
+      render();
+      payOrder(payload.orderId || '', payload.settlementMode || 'wallet_change');
+    }
+
     function payOrder(orderId, settlementMode){
       const derived = deriveState(state, ui);
       const order = findPaymentOrder(derived);
@@ -8044,6 +8170,22 @@ function resetCartDraft(){
         return;
       }
       const walletSavedAmount = (ui.paymentMethod === 'cash' && changeAmount > 0 && customerId && settlementMode === 'wallet_change') ? changeAmount : 0;
+      if(walletSavedAmount > 0 && !ui.walletSaveApprovalGranted){
+        openWalletSaveApprovalModal({
+          orderId: orderId || '',
+          settlementMode: settlementMode || '',
+          pendingPaymentKind: ui.pendingPaymentKind || '',
+          expectedRowVersion: ui.pendingPaymentExpectedRowVersion,
+          paymentMethod: ui.paymentMethod,
+          tenderedAmount: tenderedAmount,
+          changeAmount: changeAmount,
+          walletSavedAmount: walletSavedAmount,
+          walletRedeemedAmount: walletRedeemedAmount,
+          customerId: customerId,
+          paymentAccountCustomerId: paymentAccountCustomerId
+        });
+        return;
+      }
       if(ui.pendingPaymentKind === 'cart'){
         const built = buildNewOrderRecordFromCart({ paymentStatus:'paid', paymentMethod:ui.paymentMethod, tenderedAmount:tenderedAmount, changeAmount:changeAmount, walletSavedAmount:walletSavedAmount, walletRedeemedAmount:walletRedeemedAmount, customerId:customerId, paymentAccountCustomerId:paymentAccountCustomerId });
         if(!built){ toast('Nothing valid to pay'); return; }
@@ -8059,6 +8201,7 @@ function resetCartDraft(){
           ui.paymentAccountCustomerId = '';
           ui.paymentCashTendered = '';
           ui.saveChangeToWallet = false;
+          ui.walletSaveApprovalGranted = false;
           ui.activeBucket = 'all';
           persist();
           render();
@@ -8077,6 +8220,7 @@ function resetCartDraft(){
         ui.paymentAccountCustomerId = '';
         ui.paymentCashTendered = '';
         ui.saveChangeToWallet = false;
+        ui.walletSaveApprovalGranted = false;
         persist();
         render();
       }
@@ -8515,6 +8659,7 @@ function resetCartDraft(){
     App.setPurchaseReceiptField = function(field, value){ if(field === 'qty') ui.purchaseReceiveQty = value; if(field === 'cost') ui.purchaseReceiveUnitCost = value; if(field === 'batch') ui.purchaseReceiveBatch = value; if(field === 'note') ui.purchaseReceiveNote = value; persist(); };
     App.setInventoryTab = function(v){ if(v === 'reports' && !canAccessInventoryReports()){ toast('Reports are reserved for management.'); ui.inventoryTab = 'stock_take'; render(); return; } ui.inventoryTab = v; render(); };
     App.setManagementTab = function(v){ ui.managementTab = v; render(); };
+    App.setAdminCenterTab = function(v){ ui.adminCenterTab = v; persist(); render(); };
     App.setSettingsTab = function(v){
       ui.settingsTab = v;
       if(v === 'staff') ui.adminTab = 'staff';
