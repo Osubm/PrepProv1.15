@@ -8,7 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#111827" />
-  <title>196_PrepProfitOS_Tonight_TradingDay_Breadcrumb_Roster.html</title>
+  <title>198_PrepProfitOS_DeviceProfiles_StorageGuard.html</title>
   <style>
     :root{
       --bg:#f4f6fb;
@@ -390,7 +390,7 @@ textarea{min-height:76px}
 (function(){
     'use strict';
 
-    const BUILD_VERSION = '195 Deployment Candidate Tonight';
+    const BUILD_VERSION = '197 Deployment Candidate Menu Back Banner Fix';
     const BUILD_STAMP = 'build196_tonight_trading_day_breadcrumb_roster';
     const DATA_VERSION = 'ppos_build_160_transfers_task_first_initial_review_v1';
     const APP_TITLE = 'PrepProfitOS ' + BUILD_VERSION + ' - ' + BUILD_STAMP;
@@ -403,31 +403,32 @@ textarea{min-height:76px}
     };
 
     const MODULE_GROUPS = [
-  { id:'command', label:'Command', items:[['admin_center','Admin Center'],['management_bi','Management BI'],['todayOps','Today Ops'],['control_panel','Control Panel']] },
   { id:'frontline', label:'Serve / Frontline', items:[['pos','Restaurant POS'],['butchery','Butchery POS'],['kds','Kitchen KDS'],['bar','Bar POS'],['wifi_pos','WiFi Sell/Issue']] },
+  { id:'customer_value', label:'Customer Value', items:[['customers','Customers']] },
   { id:'operations', label:'Stock / Operations', items:[['inventory','Inventory'],['purchases','Purchases'],['production','Bulk-Prep'],['transfers','Transfers'],['waste','Waste'],['inOutLedger','In/Out Ledger']] },
-  { id:'oversight', label:'Supervisor / Reports', items:[['supervisor_daily_inventory','Supervisor Daily Inventory Dashboard']] },
-  { id:'customer_value', label:'Customer Value', items:[['customers','Customers']] }
+  { id:'command', label:'Command', items:[['todayOps','Today Ops'],['reports','Reports'],['control_panel','Control Panel'],['admin_center','Admin Center'],['management_bi','Management BI']] },
+  { id:'oversight', label:'Supervisor / Reports', items:[['supervisor_daily_inventory','Supervisor Daily Inventory Dashboard']] }
 ];
 
 const ROUTE_REGISTRY = [
-  { group:'Command', view:'admin_center', label:'Admin Center', quick:true },
-  { group:'Command', view:'management_bi', label:'Management BI', quick:true },
-  { group:'Command', view:'todayOps', label:'Today Ops', quick:true },
-  { group:'Command', view:'control_panel', label:'Control Panel' },
   { group:'Serve / Frontline', view:'pos', label:'Restaurant POS', quick:true },
   { group:'Serve / Frontline', view:'butchery', label:'Butchery POS' },
   { group:'Serve / Frontline', view:'kds', label:'Kitchen KDS', quick:true },
   { group:'Serve / Frontline', view:'bar', label:'Bar POS', quick:true },
   { group:'Serve / Frontline', view:'wifi_pos', label:'WiFi Sell/Issue' },
+  { group:'Customer Value', view:'customers', label:'Customers' },
   { group:'Stock / Operations', view:'inventory', label:'Inventory' },
   { group:'Stock / Operations', view:'purchases', label:'Purchases' },
   { group:'Stock / Operations', view:'production', label:'Bulk-Prep' },
   { group:'Stock / Operations', view:'transfers', label:'Transfers' },
   { group:'Stock / Operations', view:'waste', label:'Waste' },
   { group:'Stock / Operations', view:'inOutLedger', label:'In/Out Ledger' },
-  { group:'Supervisor / Reports', view:'supervisor_daily_inventory', label:'Supervisor Daily Inventory Dashboard' },
-  { group:'Customer Value', view:'customers', label:'Customers' }
+  { group:'Command', view:'todayOps', label:'Today Ops', quick:true },
+  { group:'Command', view:'reports', label:'Reports', quick:true },
+  { group:'Command', view:'control_panel', label:'Control Panel' },
+  { group:'Command', view:'admin_center', label:'Admin Center', quick:true },
+  { group:'Command', view:'management_bi', label:'Management BI', quick:true },
+  { group:'Supervisor / Reports', view:'supervisor_daily_inventory', label:'Supervisor Daily Inventory Dashboard' }
 ];
 
 const CRITICAL_HELPERS = ['stockLocationForBusinessUnit','defaultLocationForBusinessUnit','renderMainContent','renderPos','renderReports','renderDrawer'];
@@ -654,6 +655,58 @@ function formatDateTime(value){
     }
     function userUsername(user){ return normalizeNameKey(user && (user.username || user.name || user.id) || ''); }
     function normalizeUsersAuth(users){ return (users || []).map(normalizeUserAuthRecord); }
+
+    const DEVICE_PROFILE_META = {
+      pos_device:{ id:'pos_device', label:'POS device', view:'pos', stationType:'waiter_cashier' },
+      butchery_device:{ id:'butchery_device', label:'Butchery device', view:'butchery', stationType:'butchery' },
+      kds_device:{ id:'kds_device', label:'KDS device', view:'kds', stationType:'kds' }
+    };
+    function currentDeviceProfileId(){
+      return String(((state.settings || {}).deviceProfile) || 'pos_device');
+    }
+    function currentDeviceProfile(){
+      return DEVICE_PROFILE_META[currentDeviceProfileId()] || DEVICE_PROFILE_META.pos_device;
+    }
+    function setDeviceProfile(profileId){
+      const next = DEVICE_PROFILE_META[String(profileId || '')] || DEVICE_PROFILE_META.pos_device;
+      state.settings = Object.assign({}, state.settings || {}, {
+        deviceProfile: next.id,
+        deviceStationType: next.stationType || ((state.settings || {}).deviceStationType || 'waiter_cashier')
+      });
+      addAudit('DEVICE_PROFILE_CHANGED', { deviceProfile: next.id, defaultView: next.view, stationType: next.stationType || '' });
+      persist();
+      render();
+      toast(next.label + ' selected');
+    }
+    function deviceDefaultView(){
+      return (currentDeviceProfile() || {}).view || 'pos';
+    }
+    function storageStatus(){
+      try{
+        const raw = JSON.stringify(state || {});
+        const approxBytes = (raw.length || 0) * 2;
+        const approxLimit = 5 * 1024 * 1024;
+        const ratio = approxBytes / approxLimit;
+        let level = 'ok';
+        if(ratio >= 0.95) level = 'danger';
+        else if(ratio >= 0.85) level = 'warn';
+        else if(ratio >= 0.70) level = 'notice';
+        return { approxBytes:approxBytes, approxLimit:approxLimit, ratio:ratio, level:level, percent:Math.min(100, Math.round(ratio * 100)) };
+      }catch(e){
+        return { approxBytes:0, approxLimit:5 * 1024 * 1024, ratio:0, level:'unknown', percent:0 };
+      }
+    }
+    function storageWarningBanner(){
+      const s = storageStatus();
+      if(!s || s.level === 'ok' || s.level === 'unknown') return '';
+      const cls = s.level === 'notice' ? ' info' : '';
+      const msg = s.level === 'danger'
+        ? 'Storage critically full. Export backup before more trading.'
+        : (s.level === 'warn'
+          ? 'Storage nearing capacity. Export backup soon.'
+          : 'Storage usage rising. Keep backup current.');
+      return '<div class="banner' + cls + '" style="margin-top:10px">' + esc(msg) + ' · Approx usage ' + esc(s.percent) + '%</div>';
+    }
 
     function seedState(){
       const users = [
@@ -1022,7 +1075,8 @@ function formatDateTime(value){
         orderPrefix:'ORD',
         stockVarianceAlertThreshold:1,
         sessionTimeoutMinutes:5,
-        advancedMode:false
+        advancedMode:false,
+        deviceProfile:'pos_device'
       };
 
       return {
@@ -2323,8 +2377,12 @@ function runBootAudit(){
           break;
         }
       }
+      if(!target && hist.length){
+        const prevAny = hist.pop();
+        if(prevAny && prevAny.view) target = prevAny.view;
+      }
       if(!target){
-        toast('No previous screen in this module.');
+        toast('No previous screen available.');
         return;
       }
       ui.viewHistory = hist;
@@ -5746,10 +5804,10 @@ function bulkReplenishRestaurantDemo(){
         ? [['admin_center','\u{1F9ED} Admin Center'],['management_bi','\u{1F4CA} Management BI'],['todayOps','\u{1F3E0} Today Ops'],['reports','\u{1F4CB} Reports'],['control_panel','\u{2699}\uFE0F Control Panel']]
         : [['todayOps','\u{1F3E0} Today Ops'],['reports','\u{1F4CB} Reports'],['control_panel','\u{2699}\uFE0F Control Panel']];
       const groups = [
-        { title:'Command', buttons:commandButtons },
         { title:'Serve / Frontline', buttons:[['pos','\u{1F9FE} Restaurant POS'],['butchery','\u{1F969} Butchery POS'],['kds','\u{1F373} Kitchen KDS'],['bar','\u{1F37A} Bar POS'],['wifi_pos','\u{1F4F6} WiFi Sell/Issue']] },
-        { title:'Stock / Operations', buttons:[['inventory','\u{1F4E6} Inventory'],['purchases','\u{1F6D2} Purchases'],['production','\u{1F372} Bulk-Prep'],['transfers','\u{1F504} Transfers'],['waste','\u{1F5D1}\uFE0F Waste']] },
         { title:'Customer Value', buttons:[['customers','\u{1F465} Customers']] },
+        { title:'Stock / Operations', buttons:[['inventory','\u{1F4E6} Inventory'],['purchases','\u{1F6D2} Purchases'],['production','\u{1F372} Bulk-Prep'],['transfers','\u{1F504} Transfers'],['waste','\u{1F5D1}\uFE0F Waste'],['inOutLedger','\u{1F4D2} In/Out Ledger']] },
+        { title:'Command', buttons:commandButtons },
         { title:'Quick Setup', buttons:[['__appsettings','\u{2699}\uFE0F App settings']] },
         { title:'Session', buttons:[['__switch','\u{1F501} Switch user'],['__logout','\u{1F6AA} Logout']] }
       ].map(function(group){
@@ -7455,7 +7513,7 @@ function renderSettingsModule(){
 
 
 function renderModuleHeader(view){
-  if(['inventory','stockTake','stockTakeReport','inOutLedger','purchases','production','transfers','waste','variances','admin_center','management_bi','todayOps','control_panel','reports','sales_reports'].includes(view)) return '';
+  if(['inventory','stockTake','stockTakeReport','inOutLedger','purchases','production','transfers','waste','variances','admin_center','management_bi','todayOps','control_panel','reports','sales_reports','supervisor_daily_inventory'].includes(view)) return '';
   const meta = {
     dashboard:{eyebrow:'ServeNow', title:'Dashboard', subtitle:'Next-step shortcuts and operational pulse.', gradient:'linear-gradient(135deg,#334155,#64748b)'},
     pos:{eyebrow:'ServeNow', title:'ServeNow', subtitle:'Capture, bill, send, and pay from one flow.', gradient:'linear-gradient(135deg,#ea580c,#fb923c)'},
@@ -7481,7 +7539,7 @@ function renderModuleHeader(view){
 
 function currentSafeHomeView(){
   const user = currentUser();
-  const fallback = user ? (roleHomeView(user) || 'todayOps') : 'todayOps';
+  const fallback = user ? (deviceDefaultView() || roleHomeView(user) || 'todayOps') : (deviceDefaultView() || 'todayOps');
   return fallback;
 }
 function safeOpenHome(){
@@ -7522,7 +7580,7 @@ function safeOpenHome(){
   try{
     const routeIssues = viewDependencyIssues(ui.view);
     if(routeIssues.length) throw new Error(routeIssues.join(' - '));
-    const content = renderModuleHeader(ui.view) + builder();
+    const content = renderModuleHeader(ui.view) + (ui.view === 'control_panel' ? '' : storageWarningBanner()) + builder();
     ui.lastErrorView = '';
     ui.lastErrorMessage = '';
     ui.lastErrorAt = '';
@@ -8339,6 +8397,7 @@ function resetCartDraft(){
     App.openReportTab = function(v){ ui.reportTab = v; ui.view = 'sales_reports'; ui.drawerOpen = false; persist(); render(); };
     App.openSalesReportTab = function(v){ ui.reportTab = v; ui.view = 'sales_reports'; ui.drawerOpen = false; persist(); render(); };
     App.openSettingsTab = function(tab, adminTab){ ui.view = 'settings'; ui.settingsTab = tab || 'admin'; if(adminTab) ui.adminTab = adminTab; ui.drawerOpen = false; persist(); render(); };
+    App.setDeviceProfile = function(v){ setDeviceProfile(v); };
     App.setDeviceStationType = function(v){
       state.settings = Object.assign({}, state.settings || {}, { deviceStationType:String(v || 'waiter_cashier') });
       addAudit('DEVICE_STATION_CHANGED', { stationType:state.settings.deviceStationType });
