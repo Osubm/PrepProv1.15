@@ -8,7 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#111827" />
-  <title>198_PrepProfitOS_DeviceProfiles_StorageGuard.html</title>
+  <title>199_PrepProfitOS_TradingDayGuard_LoginProfile.html</title>
   <style>
     :root{
       --bg:#f4f6fb;
@@ -1276,14 +1276,25 @@ function moduleMetaForView(view){
       }
       return { icon:meta.icon, label:meta.label, sub:sub };
     }
-    function requireOpenShiftForSales(actionLabel){
-      if(currentOpenShift()) return true;
+    function promptOpenTradingDay(actionLabel){
+      ui.drawerOpen = false;
       ui.view = 'admin_center';
       ui.adminCenterTab = 'shifts';
-      ui.drawerOpen = false;
-      toast('Open a shift first, then ' + (actionLabel || 'continue') + '.');
+      openActionSheet({
+        title:'Trading Day closed',
+        message:'Open Trading Day before you ' + (actionLabel || 'continue') + '.',
+        buttons:[
+          { label:'Open Trading Day', actionId:'openTradingDay', kind:'primary' },
+          { label:'Go to Today', actionId:'openToday', kind:'ghost' }
+        ]
+      });
+      toast('Trading Day closed. Open Trading Day first.');
       persist();
       render();
+    }
+    function requireOpenShiftForSales(actionLabel){
+      if(currentOpenShift()) return true;
+      promptOpenTradingDay(actionLabel || 'continue');
       return false;
     }
     function getProductById(id){ return (state.products || []).find(p => p.id === id) || null; }
@@ -1413,6 +1424,11 @@ function moduleMetaForView(view){
       }
       if(actionId === 'openToday'){
         pushView('todayOps');
+        return;
+      }
+      if(actionId === 'openTradingDay'){
+        ui.adminCenterTab = 'shifts';
+        pushView('admin_center');
         return;
       }
       if(actionId === 'openPurchases'){
@@ -4476,6 +4492,7 @@ function renderFloating(){
               <button class="chip" onclick="App.openView('inventory',{rememberSource:true})">Inventory</button>
               <button class="chip" onclick="App.openView('purchases',{rememberSource:true})">Purchases</button>
               <button class="chip" onclick="App.openView('production',{rememberSource:true})">Bulk-Prep</button>
+              <button class="chip" onclick="App.openView('admin_center');App.setAdminCenterTab('shifts')">Trading Day</button>
               <button class="chip" onclick="App.openView('pos')">POS</button>
             </div>
           </div>
@@ -4510,7 +4527,7 @@ function renderFloating(){
             <h3 style="margin:0 0 10px">Backup / Restore</h3>
             <div class="row">
               <button class="quiet-btn" onclick="App.exportBackup()">Download backup</button>
-              <button class="primary-btn" onclick="App.openView('trialCheck')">Trial QA</button>
+              <button class="primary-btn" onclick="App.openView('trialCheck')">Trial QA</button><button class="quiet-btn" onclick="App.openView('reports')">Open Reports</button>
               <button class="quiet-btn" onclick="App.resetDemoData()">Reset demo stock</button>
             </div>
             <div class="banner info" style="margin-top:10px">Backup downloads all state as JSON. Trial QA runs regression checks.</div>
@@ -5710,8 +5727,11 @@ function bulkReplenishRestaurantDemo(){
       const lockPanel = session.lockedByPolicy
         ? '<div class="card soft stack"><div class="banner">Device session is locked after failed PIN attempts.</div><div class="field compact"><label>Approver username</label><input id="unlock-username-input" autocapitalize="off" autocomplete="username" value="' + esc(authUi.unlockUsername || '') + '" oninput="App.setUnlockUsername(this.value)" placeholder="Enter manager/admin username" /></div><div class="field compact"><label>Unlock PIN</label><input id="unlock-pin-input" type="password" inputmode="numeric" autocomplete="current-password" value="' + esc(authUi.unlockPin || '') + '" oninput="App.setUnlockPin(this.value)" placeholder="Enter unlock PIN" /></div><div class="auth-status ' + (authUi.unlockError ? 'error' : '') + '">' + esc(authUi.unlockError || 'Manager/admin username and PIN are required.') + '</div><button class="primary-btn" onclick="App.unlockDevice()">Unlock</button></div>'
         : '';
+      const profileButtons = [['pos_device','POS device'],['butchery_device','Butchery device'],['kds_device','KDS device']].map(function(item){
+        return '<button class="chip ' + (currentDeviceProfileId() === item[0] ? 'active' : '') + '" type="button" onclick="App.setDeviceProfile(\'' + item[0] + '\')">' + esc(item[1]) + '</button>';
+      }).join('');
       const loginStatus = authUi.loginError ? '<div class="auth-status error">' + esc(authUi.loginError) + '</div>' : '<div class="auth-status">Enter username and PIN. No staff list is shown on this screen. Device station: ' + esc(deviceStationProfile().label) + '.</div>';
-      return '<div class="login-shell"><div class="card login-card stack"><div><h2 style="margin:0">Prep & Profit OS</h2><div class="subtitle">' + esc(BUILD_VERSION + ' - ' + BUILD_STAMP) + '</div></div>' + lockPanel + '<div class="field compact"><label>Username</label><input id="login-username-input" autocapitalize="off" autocomplete="username" value="' + esc(authUi.loginUsername || '') + '" oninput="App.setLoginUsername(this.value)" placeholder="Enter username" /></div><div class="field compact"><label>PIN</label><input id="login-pin-input" type="password" inputmode="numeric" autocomplete="current-password" value="' + esc(authUi.loginPin || '') + '" oninput="App.setLoginPin(this.value)" placeholder="Enter PIN" /></div>' + loginStatus + '<button class="primary-btn" onclick="App.login()">Login</button><div class="tiny muted">Users must know their username and PIN. The login page does not display staff names. PIN values are not stored in localStorage.</div></div></div>';
+      return '<div class="login-shell"><div class="card login-card stack"><div><h2 style="margin:0">Prep & Profit OS</h2><div class="subtitle">' + esc(BUILD_VERSION + ' - ' + BUILD_STAMP) + '</div></div>' + lockPanel + '<div class="card soft stack"><div><h3 style="margin:0">Device profile</h3><div class="subtitle">Choose the dedicated device type for this tablet or phone.</div></div><div class="tabs">' + profileButtons + '</div><div class="tiny muted">Current profile opens ' + esc(String(currentDeviceProfile().view || '').replace(/_/g,' ').toUpperCase()) + ' after login.</div></div><div class="field compact"><label>Username</label><input id="login-username-input" autocapitalize="off" autocomplete="username" value="' + esc(authUi.loginUsername || '') + '" oninput="App.setLoginUsername(this.value)" placeholder="Enter username" /></div><div class="field compact"><label>PIN</label><input id="login-pin-input" type="password" inputmode="numeric" autocomplete="current-password" value="' + esc(authUi.loginPin || '') + '" oninput="App.setLoginPin(this.value)" placeholder="Enter PIN" /></div>' + loginStatus + '<button class="primary-btn" onclick="App.login()">Login</button><div class="tiny muted">Users must know their username and PIN. The login page does not display staff names. PIN values are not stored in localStorage.</div></div></div>';
     }
 
     function login(){
@@ -5759,7 +5779,7 @@ function bulkReplenishRestaurantDemo(){
       ui.selectedCustomerId = '';
       ui.paymentCustomerId = '';
       ui.saveChangeToWallet = false;
-      ui.view = homeView;
+      ui.view = deviceDefaultView() || homeView;
       ui.viewHistory = [ui.view];
       persist();
       render();
@@ -5890,7 +5910,7 @@ function renderPos(derived){
       }).join('') : '<div class="empty">No matching orders.</div>';
 
       const paymentOrderMeta = paymentOrder ? '<div class="tiny muted">' + esc(paymentOrder.isDraftPayment ? 'Draft cart payment' : ('Row v' + (paymentOrder.rowVersion || 0))) + '</div>' : '';
-      const shiftBanner = currentOpenShift() ? '' : '<div class="banner" style="margin-bottom:10px"><strong>Shift not open.</strong> You cannot add items or process sales until a shift is opened. <button class="mini-btn" type="button" style="margin-left:8px" onclick="App.openView(\'admin_center\');App.setAdminTab(\'shifts\')">Open shifts now</button></div>';
+      const shiftBanner = currentOpenShift() ? '' : '<div class="banner" style="margin-bottom:10px"><strong>Trading Day closed.</strong> You cannot add items or process sales until Trading Day is opened. <button class="mini-btn" type="button" style="margin-left:8px" onclick="App.openView(\'admin_center\');App.setAdminCenterTab(\'shifts\')">Open Trading Day</button></div>';
       const masterDataBanner = ui.lastMasterDataEntity ? '<div class="banner success" style="margin-bottom:10px"><strong>Master data updated.</strong> Latest saved surface: ' + esc(ui.lastMasterDataEntity) + '. Lists and prices now use the saved data for new selections and new orders.</div>' : '';
       const paymentMethodChips = paymentOrder ? '<div class="tabs"><button class="chip ' + (ui.paymentMethod === 'cash' ? 'active' : '') + '" onclick="App.setPaymentMethod(\'cash\')">Cash</button><button class="chip ' + (ui.paymentMethod === 'card' ? 'active' : '') + '" onclick="App.setPaymentMethod(\'card\')">Card</button><button class="chip ' + (ui.paymentMethod === 'mobile' ? 'active' : '') + '" onclick="App.setPaymentMethod(\'mobile\')">Mobile</button><button class="chip ' + (ui.paymentMethod === 'wallet' ? 'active' : '') + '" onclick="App.setPaymentMethod(\'wallet\')">Wallet</button><button class="chip ' + (ui.paymentMethod === 'account' ? 'active' : '') + '" onclick="App.setPaymentMethod(\'account\')">Account</button></div>' : '';
       const paymentCustomerValue = paymentOrder ? (ui.paymentCustomerId || paymentOrder.customerId || ui.selectedCustomerId || '') : '';
@@ -8647,7 +8667,8 @@ function resetCartDraft(){
       }
       const currentShift = currentOpenShift();
       if (!currentShift) {
-        return { valid: false, reason: 'No open shift. Open shift to process payment.' };
+        promptOpenTradingDay('process payment');
+        return { valid: false, reason: 'Trading Day closed. Open Trading Day to process payment.' };
       }
       return { valid: true };
     }
